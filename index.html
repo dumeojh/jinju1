@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>수행평가: 함수 추세선 분석 프로그램</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/regression/2.0.1/regression.min.js"></script>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; padding: 20px; background-color: #f5f7fa; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        .input-section { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; justify-content: center; }
+        .data-row { border: 1px solid #ddd; padding: 10px; border-radius: 8px; }
+        input { width: 60px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        .controls { text-align: center; margin: 20px 0; border-top: 1px solid #eee; padding-top: 20px; }
+        select, button { padding: 10px 20px; font-size: 16px; cursor: pointer; border-radius: 5px; border: 1px solid #3498db; }
+        button { background-color: #3498db; color: white; transition: 0.3s; }
+        button:hover { background-color: #2980b9; }
+        #resultFormula { font-size: 1.2em; font-weight: bold; color: #e74c3c; text-align: center; margin-top: 10px; min-height: 1.5em; }
+        canvas { margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📈 실생활 데이터 함수 분석</h1>
+    
+    <p style="text-align: center; color: #666;">(x, y) 데이터를 7~10개 입력하고 추세선 종류를 선택하세요.</p>
+
+    <div class="input-section" id="inputs">
+        </div>
+
+    <div class="controls">
+        <select id="typeSelect">
+            <option value="linear">일차함수 (Linear)</option>
+            <option value="exponential">지수함수 (Exponential)</option>
+            <option value="logarithmic">로그함수 (Logarithmic)</option>
+            <option value="polynomial">이차함수 (Quadratic)</option>
+        </select>
+        <button onclick="calculate()">분석 및 그래프 그리기</button>
+    </div>
+
+    <div id="resultFormula"></div>
+    <canvas id="myChart"></canvas>
+</div>
+
+<script>
+    // 1. 입력 칸 10개 자동 생성
+    const inputContainer = document.getElementById('inputs');
+    for (let i = 1; i <= 10; i++) {
+        inputContainer.innerHTML += `
+            <div class="data-row">
+                <b>${i}</b> | 
+                x: <input type="number" class="x-val" step="any"> 
+                y: <input type="number" class="y-val" step="any">
+            </div>
+        `;
+    }
+
+    let myChart = null;
+
+    function calculate() {
+        const xInputs = document.querySelectorAll('.x-val');
+        const yInputs = document.querySelectorAll('.y-val');
+        const type = document.getElementById('typeSelect').value;
+        
+        let rawData = [];
+        for (let i = 0; i < 10; i++) {
+            if (xInputs[i].value !== "" && yInputs[i].value !== "") {
+                rawData.push([parseFloat(xInputs[i].value), parseFloat(yInputs[i].value)]);
+            }
+        }
+
+        if (rawData.length < 7) {
+            alert("최소 7개의 데이터를 입력해야 합니다!");
+            return;
+        }
+
+        // 데이터 정렬 (x축 기준)
+        rawData.sort((a, b) => a[0] - b[0]);
+
+        // 2. 추세선 계산 (regression-js 사용)
+        let result;
+        if (type === 'linear') result = regression.linear(rawData);
+        else if (type === 'exponential') result = regression.exponential(rawData);
+        else if (type === 'logarithmic') result = regression.logarithmic(rawData);
+        else if (type === 'polynomial') result = regression.polynomial(rawData, { order: 2 });
+
+        // 결과식 표시
+        document.getElementById('resultFormula').innerText = `도출된 식: ${result.string}`;
+
+        // 3. 그래프 데이터 준비
+        const minX = Math.min(...rawData.map(d => d[0]));
+        const maxX = Math.max(...rawData.map(d => d[0]));
+        const step = (maxX - minX) / 50;
+        
+        let trendLine = [];
+        for (let x = minX; x <= maxX; x += step) {
+            trendLine.push({ x: x, y: result.predict(x)[1] });
+        }
+
+        updateChart(rawData, trendLine, type);
+    }
+
+    function updateChart(rawData, trendLine, type) {
+        const ctx = document.getElementById('myChart').getContext('2d');
+        
+        if (myChart) myChart.destroy();
+
+        myChart = new Chart(ctx, {
+            data: {
+                datasets: [
+                    {
+                        type: 'scatter',
+                        label: '수집 데이터',
+                        data: rawData.map(d => ({ x: d[0], y: d[1] })),
+                        backgroundColor: '#3498db',
+                        pointRadius: 6
+                    },
+                    {
+                        type: 'line',
+                        label: `추세선 (${type})`,
+                        data: trendLine,
+                        borderColor: '#e74c3c',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { type: 'linear', position: 'bottom', title: { display: true, text: 'X 축' } },
+                    y: { title: { display: true, text: 'Y 축' } }
+                }
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
