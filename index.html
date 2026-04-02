@@ -110,6 +110,26 @@
 </div>
 
 <script>
+    // ==========================================
+    // [추가된 기능] 다중 탭/창 접속 방지 (부정행위 차단)
+    // ==========================================
+    const examChannel = new BroadcastChannel('anseong_exam_channel');
+    
+    examChannel.onmessage = function(event) {
+        if (event.data === 'check_open') {
+            // 이미 열려있는 기존 탭이 새로 열린 탭에게 "내가 먼저 켜져 있다"고 알림
+            examChannel.postMessage('already_open'); 
+        } else if (event.data === 'already_open') {
+            // 다른 탭이 켜져 있다는 신호를 받으면, 새로 연 탭은 즉시 화면을 차단함
+            alert("🚨 부정행위 방지: 이미 다른 탭이나 창에서 시험 시스템이 열려 있습니다. 이 창은 사용할 수 없습니다.");
+            document.body.innerHTML = "<div style='text-align:center; margin-top:100px;'><h2 style='color:#e74c3c;'>🚫 동시 접속이 차단되었습니다.</h2><p>기존에 열려있는 창에서 시험을 진행하거나, 기존 창을 닫고 다시 접속해주세요.</p></div>";
+        }
+    };
+    
+    // 페이지가 로드될 때, 다른 탭이 열려있는지 확인 신호를 보냄
+    examChannel.postMessage('check_open');
+    // ==========================================
+
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzPgkRSqKwU93N83HLKbp09icgvBQtpjvbLNtWGc-EXOuDrimFfSIhyqBimBqyATIkQ/exec";
     const grid = document.getElementById('dataInputGrid');
     for(let i=1; i<=10; i++) {
