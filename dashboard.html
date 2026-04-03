@@ -45,7 +45,7 @@
         .status-done { color: #27ae60; font-weight: bold; background: #e9f7ef; padding: 5px 10px; border-radius: 20px; font-size: 0.9em; }
         
         /* 필터링 결과 없음 메시지 */
-        .no-data { padding: 50px; color: #a0aec0; font-weight: bold; }
+        .no-data { padding: 50px; color: #a0aec0; font-weight: bold; font-size: 1.1em; }
     </style>
 </head>
 <body>
@@ -57,7 +57,7 @@
         <div class="filter-group">
             <label>학년</label>
             <select id="filterGrade" onchange="fetchData()">
-                <option value="all">전체</option>
+                <option value="">-- 선택 --</option>
                 <option value="1">1학년</option>
                 <option value="2">2학년</option>
                 <option value="3">3학년</option>
@@ -66,7 +66,7 @@
         <div class="filter-group">
             <label>반</label>
             <select id="filterClass" onchange="fetchData()">
-                <option value="all">전체</option>
+                <option value="">-- 선택 --</option>
                 <option value="1">1반</option><option value="2">2반</option>
                 <option value="3">3반</option><option value="4">4반</option>
                 <option value="5">5반</option><option value="6">6반</option>
@@ -78,7 +78,7 @@
     </div>
 
     <div class="status-header">
-        <span id="lastUpdated">마지막 업데이트: 대기 중...</span>
+        <span id="lastUpdated">대기 중 (조건 선택 필요)</span>
         <div>
             <span style="font-size: 0.9em; margin-right: 15px; color: #7f8c8d;">(5초마다 자동 갱신)</span>
             <button class="refresh-btn" onclick="fetchData()">🔄 즉시 새로고침</button>
@@ -89,7 +89,8 @@
         <thead>
             <tr>
                 <th>시작 시간</th>
-                <th>학년</th> <th>반</th>
+                <th>학년</th>
+                <th>반</th>
                 <th>번호</th>
                 <th>이름</th>
                 <th>상태</th>
@@ -98,7 +99,8 @@
             </tr>
         </thead>
         <tbody id="tableBody">
-            <tr><td colspan="8">실시간 데이터를 불러오는 중입니다...</td></tr> </tbody>
+            <tr><td colspan="8" class="no-data" style="color: var(--primary);">👆 상단에서 모니터링할 학년과 반을 모두 선택해 주세요.</td></tr>
+        </tbody>
     </table>
 </div>
 
@@ -106,30 +108,30 @@
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxaszSktp0zGoiWTohe0v_npArxthOgbu5RHS-gXI03XzYI80FHvOh6-EvhpfLicco-/exec?sheet=status";
 
     async function fetchData() {
+        const selectedGrade = document.getElementById('filterGrade').value;
+        const selectedClass = document.getElementById('filterClass').value;
+        const tbody = document.getElementById('tableBody');
+
+        // ✅ 학년이나 반 중 하나라도 선택되지 않았다면 서버에 요청하지 않고 대기합니다.
+        if (!selectedGrade || !selectedClass) {
+            tbody.innerHTML = '<tr><td colspan="8" class="no-data" style="color: var(--primary);">👆 모니터링할 학년과 반을 모두 선택해 주세요.</td></tr>';
+            document.getElementById('lastUpdated').innerText = "대기 중 (조건 선택 필요)";
+            return; 
+        }
+
         try {
+            document.getElementById('lastUpdated').innerText = "데이터 불러오는 중...";
+            
             const response = await fetch(GOOGLE_SCRIPT_URL);
             const data = await response.json();
             
-            const tbody = document.getElementById('tableBody');
-            
-            // 필터 값 가져오기
-            const selectedGrade = document.getElementById('filterGrade').value;
-            const selectedClass = document.getElementById('filterClass').value;
-
-            // 데이터 필터링 로직 (학년, 반이 분리된 구글 시트에 맞게 최적화됨)
+            // 데이터 필터링 (선택된 학년과 반만 추출)
             const filteredData = data.filter(row => {
                 const rowGrade = String(row['학년'] || "");
                 const rowClass = String(row['반'] || "");
                 
-                // 학년 일치 여부 확인 (전체이거나, 숫자만 있거나, '학년' 글자가 붙어있거나 모두 허용)
-                const gradeMatch = (selectedGrade === "all") || 
-                                   (rowGrade === selectedGrade) || 
-                                   (rowGrade === selectedGrade + "학년");
-
-                // 반 일치 여부 확인
-                const classMatch = (selectedClass === "all") || 
-                                   (rowClass === selectedClass) || 
-                                   (rowClass === selectedClass + "반");
+                const gradeMatch = (rowGrade === selectedGrade) || (rowGrade === selectedGrade + "학년");
+                const classMatch = (rowClass === selectedClass) || (rowClass === selectedClass + "반");
 
                 return gradeMatch && classMatch;
             });
@@ -137,13 +139,10 @@
             tbody.innerHTML = ''; 
 
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="no-data">선택한 학년/반에 해당하는 진행 데이터가 없습니다.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="no-data">선택한 반에 접속하여 시험을 시작한 학생이 없습니다.</td></tr>';
                 updateTime();
                 return;
             }
-
-            // 최신 순으로 정렬 (선택 사항)
-            // filteredData.reverse();
 
             filteredData.forEach(row => {
                 const tr = document.createElement('tr');
@@ -165,7 +164,8 @@
 
                 tr.innerHTML = `
                     <td>${formatDate(row['시작시간'] || row['시작 시간'])}</td>
-                    <td>${row['학년'] || '-'}</td> <td>${row['반'] || '-'}</td>
+                    <td>${row['학년'] || '-'}</td>
+                    <td>${row['반'] || '-'}</td>
                     <td>${row['번호'] || '-'}</td>
                     <td>${row['이름'] || '-'}</td>
                     <td>${statusHtml}</td>
@@ -187,7 +187,7 @@
         document.getElementById('lastUpdated').innerText = `마지막 업데이트: ${now.toLocaleTimeString()}`;
     }
 
-    fetchData();
+    // 5초마다 자동 갱신 (조건이 충족되었을 때만 fetchData 내부에서 작동)
     setInterval(fetchData, 5000);
 </script>
 </body>
