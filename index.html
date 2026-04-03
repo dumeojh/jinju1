@@ -171,7 +171,12 @@
 </div>
 
 <script>
-    /** [기능 1] 부정행위 방지: 다중 탭 접속 차단 **/
+    /** [보안 기능 1] 우클릭, 복사, 붙여넣기 금지 **/
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('paste', e => e.preventDefault());
+
+    /** [보안 기능 2] 부정행위 방지: 다중 탭 접속 차단 **/
     const examChannel = new BroadcastChannel('anseong_exam_channel');
     examChannel.onmessage = function(e) {
         if (e.data === 'check_open') examChannel.postMessage('already_open');
@@ -182,15 +187,60 @@
     };
     examChannel.postMessage('check_open');
 
-    /** [기능 2] 환경 설정 및 초기화 **/
-    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxaszSktp0zGoiWTohe0v_npArxthOgbu5RHS-gXI03XzYI80FHvOh6-EvhpfLicco-/exec";
+    /** [환경 설정 및 초기화] **/
+    // ⚠️ 주의: 선생님의 최신 스크립트 주소로 꼭 변경해서 사용하세요!
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxBdpbunRg4V8XBD-inpy_hnDGI-4F3BKKN8FDZ5-sbmjhst67E14rByUneyFMJx8SB/exec";
     
     const grid = document.getElementById('dataInputGrid');
     for(let i=1; i<=10; i++) {
         grid.innerHTML += `<div class="data-item">#${i} <input type="number" class="ix" placeholder="x"> <input type="number" class="iy" placeholder="y"></div>`;
     }
 
-    /** [기능 3] 타이머 설정 (45분) **/
+    /** [보안 기능 3] 화면 이탈 감지 (3진 아웃) **/
+    let warningCount = 0;
+    let isExamStarted = false;
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden && isExamStarted) {
+            warningCount++;
+            handleWarning();
+        }
+    });
+
+    async function handleWarning() {
+        let msg = "";
+        if (warningCount === 1) {
+            msg = "1차경고";
+            alert("🚨 [1차 경고] 시험 화면을 벗어났습니다. 검색 등 다른 창으로 이동하면 부정행위로 간주됩니다.");
+        } else if (warningCount === 2) {
+            msg = "2차경고";
+            alert("🚨 [2차 경고] 마지막 경고입니다. 한 번 더 화면을 이탈하면 시험지가 강제로 제출됩니다.");
+        } else if (warningCount >= 3) {
+            msg = "강제제출";
+            alert("🚫 [부정행위 확정] 3차 이탈로 인해 시험지가 자동 제출됩니다.");
+            saveToSheets(true, "강제제출");
+            return;
+        }
+        
+        // 선생님 대시보드(비고란)에 경고 횟수 전송
+        const grade = document.getElementById('gradeSelect').value;
+        const clsNum = document.getElementById('classSelect').value;
+        const num = document.getElementById('stuNum').value;
+        
+        fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify({
+                action: 'warning',
+                grade: grade,
+                stuClass: clsNum,
+                stuNum: num,
+                message: msg
+            })
+        });
+    }
+
+    /** [타이머 설정 (45분)] **/
     let examTime = 45 * 60;
     let timerInterval;
 
@@ -217,14 +267,14 @@
                 timerDisplay.classList.remove("blink-anim");
                 alert("⏰ 시험 시간이 종료되었습니다! 현재까지 작성된 내용으로 자동 제출됩니다.");
                 
-                saveToSheets(true); 
+                saveToSheets(true, "시간초과"); 
             }
             
             examTime--;
         }, 1000);
     }
 
-/** [기능 4] 시험 시작 (학년/반/번호 분리 전송) **/
+    /** [시험 시작] **/
     function startExam() {
         const grade = document.getElementById('gradeSelect').value;
         const clsNum = document.getElementById('classSelect').value;
@@ -246,24 +296,25 @@
         document.getElementById('stickyHeader').style.display = 'block';
         document.getElementById('displayInfo').innerText = `${grade}학년 ${clsNum}반 ${num}번 ${name} (영역: ${area})`;
         
-        // --- ✅ 서버에 '시작' 신호 발송 시 학년과 반을 따로 전송 ---
+        isExamStarted = true; // 시험 시작 상태 활성화 (이탈 감지 시작)
+
+        // 서버에 '시작' 신호 발송
         fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             body: JSON.stringify({ 
                 action: 'start', 
-                grade: grade,        // 학년 추가
-                stuClass: clsNum,    // 반 분리
+                grade: grade, 
+                stuClass: clsNum, 
                 stuNum: num, 
                 stuName: name 
             })
         });
-        // -------------------------------------------------------------------
 
         startTimer();
     }
 
-    /** [기능 5] 회귀 분석 및 그래프 그리기 (삼각함수 로직 유지) **/
+    /** [회귀 분석 및 그래프 그리기] **/
     let chartInstance = null;
 
     function runAnalysis() {
@@ -310,11 +361,7 @@
             let B = Math.PI / halfPeriod;
             let C = xOfMax; 
 
-            res = {
-                predict: function(x) {
-                    return [x, A * Math.cos(B * (x - C)) + D];
-                }
-            };
+            res = { predict: function(x) { return [x, A * Math.cos(B * (x - C)) + D]; } };
 
             const A_f = A.toFixed(4);
             const B_f = B.toFixed(4);
@@ -365,15 +412,15 @@
         });
     }
 
-    /** [기능 6] 구글 시트에 모든 데이터 최종 제출 (학년/반 분리) **/
-    async function saveToSheets(isForceSubmit = false) {
+    /** [최종 제출] 비고란(type) 데이터 포함 전송 **/
+    async function saveToSheets(isForceSubmit = false, type = "정상제출") {
         const grade = document.getElementById('gradeSelect').value;
         const clsNum = document.getElementById('classSelect').value;
         const num = document.getElementById('stuNum').value;
         const studentKey = `submitted_${grade}_${clsNum}_${num}`;
 
         if(localStorage.getItem(studentKey)) {
-            alert("🚨 이미 제출이 완료된 학번입니다. 중복 제출은 불가능합니다.");
+            alert("🚨 이미 제출이 완료된 학번입니다.");
             return;
         }
 
@@ -384,6 +431,7 @@
         }
         
         btn.disabled = true; btn.innerText = "제출 중...";
+        isExamStarted = false; // 제출 중에는 이탈 감지 일시 중지
 
         let ptsArr = [];
         const xs = document.querySelectorAll('.ix'), ys = document.querySelectorAll('.iy');
@@ -393,7 +441,6 @@
         
         const refs = document.querySelectorAll('.ref');
 
-        // ✅ 학년, 반 분리해서 전송
         const payload = {
             grade: grade,
             stuClass: clsNum,
@@ -409,7 +456,8 @@
             formula: document.getElementById('outFormula').innerText.replace("산출된 함수식", "").trim(),
             obs1: document.getElementById('obs1').value,
             obs2: document.getElementById('obs2').value,
-            obs3: document.getElementById('obs3').value
+            obs3: document.getElementById('obs3').value,
+            submitType: type // ✅ 정상제출, 강제제출, 시간초과 등의 상태를 기록
         };
 
         try {
@@ -431,6 +479,7 @@
         } catch (e) {
             alert("❌ 오류가 발생했습니다. 화면을 캡처한 후 선생님께 문의하세요.");
             btn.disabled = false; btn.innerText = "다시 제출";
+            isExamStarted = true; // 실패 시 다시 감지 활성화
         }
     }
 </script>
