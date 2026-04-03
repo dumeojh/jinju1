@@ -10,7 +10,6 @@
         .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
         h1 { color: var(--primary); text-align: center; margin-top: 0; border-bottom: 2px solid var(--accent); padding-bottom: 15px; margin-bottom: 25px; }
         
-        /* 필터 섹션 스타일 */
         .filter-section { 
             background: #f1f4f8; 
             padding: 20px; 
@@ -37,14 +36,18 @@
         .refresh-btn:hover { background: #2980b9; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 1.05em; }
-        th, td { padding: 15px 12px; text-align: center; border-bottom: 1px solid #eee; }
-        th { background-color: var(--primary); color: white; position: sticky; top: 0; }
+        th, td { padding: 12px 10px; text-align: center; border-bottom: 1px solid #eee; }
+        th { background-color: var(--primary); color: white; position: sticky; top: 0; z-index: 10; }
+        
+        /* 상태별 행 스타일 */
+        .row-empty { color: #ccc; background-color: #fafafa; } /* 미접속 */
+        .row-active { background-color: #fff; color: #2c3e50; } /* 진행 중 또는 완료 */
         tr:hover { background-color: #f1f7fd; }
-        
-        .status-ing { color: #e67e22; font-weight: bold; background: #fdf2e9; padding: 5px 10px; border-radius: 20px; font-size: 0.9em; }
-        .status-done { color: #27ae60; font-weight: bold; background: #e9f7ef; padding: 5px 10px; border-radius: 20px; font-size: 0.9em; }
-        
-        /* 필터링 결과 없음 메시지 */
+
+        .status-ing { color: #e67e22; font-weight: bold; background: #fdf2e9; padding: 4px 10px; border-radius: 20px; font-size: 0.9em; }
+        .status-done { color: #27ae60; font-weight: bold; background: #e9f7ef; padding: 4px 10px; border-radius: 20px; font-size: 0.9em; }
+        .status-waiting { color: #bdc3c7; font-size: 0.9em; }
+
         .no-data { padding: 50px; color: #a0aec0; font-weight: bold; font-size: 1.1em; }
     </style>
 </head>
@@ -78,9 +81,9 @@
     </div>
 
     <div class="status-header">
-        <span id="lastUpdated">대기 중 (조건 선택 필요)</span>
+        <span id="lastUpdated">대기 중 (학년/반을 선택하세요)</span>
         <div>
-            <span style="font-size: 0.9em; margin-right: 15px; color: #7f8c8d;">(5초마다 자동 갱신)</span>
+            <span style="font-size: 0.85em; margin-right: 10px; color: #7f8c8d;">(5초 자동 갱신)</span>
             <button class="refresh-btn" onclick="fetchData()">🔄 즉시 새로고침</button>
         </div>
     </div>
@@ -88,18 +91,17 @@
     <table>
         <thead>
             <tr>
+                <th width="80">번호</th>
+                <th width="120">이름</th>
+                <th width="150">상태</th>
                 <th>시작 시간</th>
-                <th>학년</th>
-                <th>반</th>
-                <th>번호</th>
-                <th>이름</th>
-                <th>상태</th>
                 <th>종료 시간</th>
                 <th>소요 시간</th>
+                <th>비고</th>
             </tr>
         </thead>
         <tbody id="tableBody">
-            <tr><td colspan="8" class="no-data" style="color: var(--primary);">👆 상단에서 모니터링할 학년과 반을 모두 선택해 주세요.</td></tr>
+            <tr><td colspan="7" class="no-data">👆 상단에서 모니터링할 학년과 반을 선택해 주세요.</td></tr>
         </tbody>
     </table>
 </div>
@@ -112,74 +114,81 @@
         const selectedClass = document.getElementById('filterClass').value;
         const tbody = document.getElementById('tableBody');
 
-        // ✅ 학년이나 반 중 하나라도 선택되지 않았다면 서버에 요청하지 않고 대기합니다.
         if (!selectedGrade || !selectedClass) {
-            tbody.innerHTML = '<tr><td colspan="8" class="no-data" style="color: var(--primary);">👆 모니터링할 학년과 반을 모두 선택해 주세요.</td></tr>';
-            document.getElementById('lastUpdated').innerText = "대기 중 (조건 선택 필요)";
+            tbody.innerHTML = '<tr><td colspan="7" class="no-data">👆 모니터링할 학년과 반을 선택해 주세요.</td></tr>';
             return; 
         }
 
         try {
-            document.getElementById('lastUpdated').innerText = "데이터 불러오는 중...";
-            
             const response = await fetch(GOOGLE_SCRIPT_URL);
             const data = await response.json();
             
-            // 데이터 필터링 (선택된 학년과 반만 추출)
-            const filteredData = data.filter(row => {
+            // 1. 해당 반 데이터만 필터링
+            const classData = data.filter(row => {
                 const rowGrade = String(row['학년'] || "");
                 const rowClass = String(row['반'] || "");
-                
-                const gradeMatch = (rowGrade === selectedGrade) || (rowGrade === selectedGrade + "학년");
-                const classMatch = (rowClass === selectedClass) || (rowClass === selectedClass + "반");
-
-                return gradeMatch && classMatch;
+                return (rowGrade === selectedGrade || rowGrade === selectedGrade + "학년") && 
+                       (rowClass === selectedClass || rowClass === selectedClass + "반");
             });
 
+            // 2. 번호를 Key로 하는 객체로 변환 (중복 데이터 발생 시 마지막 데이터 우선)
+            const studentMap = {};
+            classData.forEach(row => {
+                studentMap[parseInt(row['번호'])] = row;
+            });
+
+            // 3. 1번부터 35번까지 행 생성
             tbody.innerHTML = ''; 
-
-            if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="no-data">선택한 반에 접속하여 시험을 시작한 학생이 없습니다.</td></tr>';
-                updateTime();
-                return;
-            }
-
-            filteredData.forEach(row => {
+            for (let i = 1; i <= 35; i++) {
+                const student = studentMap[i];
                 const tr = document.createElement('tr');
                 
-                const formatDate = (dateString) => {
-                    if (!dateString) return "-";
-                    const d = new Date(dateString);
-                    if (isNaN(d)) return dateString; 
-                    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
-                };
+                if (student) {
+                    // 데이터가 있는 경우 (접속 중 또는 완료)
+                    tr.className = 'row-active';
+                    
+                    let statusRaw = student['상태'] || '-';
+                    let statusHtml = statusRaw.includes('진행 중') 
+                        ? `<span class="status-ing">🟢 진행 중</span>` 
+                        : `<span class="status-done">🔵 제출 완료</span>`;
 
-                let statusRaw = row['상태'] || '-';
-                let statusHtml = statusRaw;
-                if (statusRaw.includes('진행 중')) {
-                    statusHtml = `<span class="status-ing">🟢 진행 중</span>`;
-                } else if (statusRaw.includes('제출 완료')) {
-                    statusHtml = `<span class="status-done">🔵 제출 완료</span>`;
+                    tr.innerHTML = `
+                        <td><b>${i}</b></td>
+                        <td>${student['이름'] || '-'}</td>
+                        <td>${statusHtml}</td>
+                        <td>${formatDate(student['시작시간'] || student['시작 시간'])}</td>
+                        <td>${formatDate(student['종료시간'] || student['종료 시간'])}</td>
+                        <td>${student['소요시간'] || student['소요 시간'] || '-'}</td>
+                        <td style="font-size:0.85em; color:#7f8c8d;">${student['학년']}학년 ${student['반']}반</td>
+                    `;
+                } else {
+                    // 데이터가 없는 경우 (미접속)
+                    tr.className = 'row-empty';
+                    tr.innerHTML = `
+                        <td>${i}</td>
+                        <td>-</td>
+                        <td><span class="status-waiting">미접속</span></td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    `;
                 }
-
-                tr.innerHTML = `
-                    <td>${formatDate(row['시작시간'] || row['시작 시간'])}</td>
-                    <td>${row['학년'] || '-'}</td>
-                    <td>${row['반'] || '-'}</td>
-                    <td>${row['번호'] || '-'}</td>
-                    <td>${row['이름'] || '-'}</td>
-                    <td>${statusHtml}</td>
-                    <td>${formatDate(row['종료시간'] || row['종료 시간'])}</td>
-                    <td>${row['소요시간'] || row['소요 시간'] || '-'}</td>
-                `;
                 tbody.appendChild(tr);
-            });
+            }
             
             updateTime();
         } catch (error) {
             console.error("데이터 로드 실패:", error);
-            document.getElementById('lastUpdated').innerText = "데이터 갱신 오류 (인터넷 연결을 확인하세요)";
+            document.getElementById('lastUpdated').innerText = "데이터 갱신 오류";
         }
+    }
+
+    function formatDate(dateString) {
+        if (!dateString || dateString === "-") return "-";
+        const d = new Date(dateString);
+        if (isNaN(d)) return dateString; 
+        return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
     }
 
     function updateTime() {
@@ -187,7 +196,6 @@
         document.getElementById('lastUpdated').innerText = `마지막 업데이트: ${now.toLocaleTimeString()}`;
     }
 
-    // 5초마다 자동 갱신 (조건이 충족되었을 때만 fetchData 내부에서 작동)
     setInterval(fetchData, 5000);
 </script>
 </body>
