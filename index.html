@@ -286,7 +286,7 @@
         
         if(!grade || !clsNum || !num || !name || !area) { alert("항목을 모두 입력하세요."); return; }
         
-        // submitted_v1_$  약간만 수정하면 모든 학생을 다시 시험보게 할 수 있다.
+        // submitted_v1_$  약간만 수정하면 모든 학생을 다시 시험보게 할 수 있다. saveToSheets() 여기 두 군데 수정해야함.
         const studentKey = `submitted_${grade}_${clsNum}_${num}`;
         
         if(localStorage.getItem(studentKey)) {
