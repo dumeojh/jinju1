@@ -89,7 +89,7 @@
         <thead>
             <tr>
                 <th>시작 시간</th>
-                <th>반 정보</th>
+                <th>학년</th> <th>반</th>
                 <th>번호</th>
                 <th>이름</th>
                 <th>상태</th>
@@ -98,8 +98,7 @@
             </tr>
         </thead>
         <tbody id="tableBody">
-            <tr><td colspan="7">실시간 데이터를 불러오는 중입니다...</td></tr>
-        </tbody>
+            <tr><td colspan="8">실시간 데이터를 불러오는 중입니다...</td></tr> </tbody>
     </table>
 </div>
 
@@ -117,20 +116,20 @@
             const selectedGrade = document.getElementById('filterGrade').value;
             const selectedClass = document.getElementById('filterClass').value;
 
-            // 데이터 필터링 로직
+            // 데이터 필터링 로직 (학년, 반이 분리된 구글 시트에 맞게 최적화됨)
             const filteredData = data.filter(row => {
-                const rowValue = String(row['반'] || ""); // 예: "2-1" 또는 "1"
+                const rowGrade = String(row['학년'] || "");
+                const rowClass = String(row['반'] || "");
                 
-                // 학년 필터링 (rowValue가 "2-1" 형태일 때 앞자리 체크)
+                // 학년 일치 여부 확인 (전체이거나, 숫자만 있거나, '학년' 글자가 붙어있거나 모두 허용)
                 const gradeMatch = (selectedGrade === "all") || 
-                                   rowValue.startsWith(selectedGrade) || 
-                                   rowValue.includes(selectedGrade + "학년");
+                                   (rowGrade === selectedGrade) || 
+                                   (rowGrade === selectedGrade + "학년");
 
-                // 반 필터링 (rowValue가 "2-1" 형태일 때 뒷자리 체크, 혹은 단순 숫자 체크)
+                // 반 일치 여부 확인
                 const classMatch = (selectedClass === "all") || 
-                                   rowValue.endsWith("-" + selectedClass) || 
-                                   rowValue.split("-")[1] === selectedClass ||
-                                   rowValue === selectedClass;
+                                   (rowClass === selectedClass) || 
+                                   (rowClass === selectedClass + "반");
 
                 return gradeMatch && classMatch;
             });
@@ -138,7 +137,7 @@
             tbody.innerHTML = ''; 
 
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="no-data">선택한 학년/반에 해당하는 진행 데이터가 없습니다.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="no-data">선택한 학년/반에 해당하는 진행 데이터가 없습니다.</td></tr>';
                 updateTime();
                 return;
             }
@@ -166,7 +165,7 @@
 
                 tr.innerHTML = `
                     <td>${formatDate(row['시작시간'] || row['시작 시간'])}</td>
-                    <td>${row['반'] || '-'}</td>
+                    <td>${row['학년'] || '-'}</td> <td>${row['반'] || '-'}</td>
                     <td>${row['번호'] || '-'}</td>
                     <td>${row['이름'] || '-'}</td>
                     <td>${statusHtml}</td>
