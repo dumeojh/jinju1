@@ -224,7 +224,7 @@
         }, 1000);
     }
 
-/** [기능 4] 시험 시작 (학년/반 조합으로 수정) **/
+/** [기능 4] 시험 시작 (학년/반/번호 분리 전송) **/
     function startExam() {
         const grade = document.getElementById('gradeSelect').value;
         const clsNum = document.getElementById('classSelect').value;
@@ -234,7 +234,6 @@
         
         if(!grade || !clsNum || !num || !name || !area) { alert("항목을 모두 입력하세요."); return; }
         
-        const combinedClass = `${grade}-${clsNum}`; // 예: "1-3", "2-5"
         const studentKey = `submitted_${grade}_${clsNum}_${num}`;
         
         if(localStorage.getItem(studentKey)) {
@@ -247,13 +246,14 @@
         document.getElementById('stickyHeader').style.display = 'block';
         document.getElementById('displayInfo').innerText = `${grade}학년 ${clsNum}반 ${num}번 ${name} (영역: ${area})`;
         
-        // --- ✅ 서버에 '시작' 신호 발송 ---
+        // --- ✅ 서버에 '시작' 신호 발송 시 학년과 반을 따로 전송 ---
         fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             body: JSON.stringify({ 
                 action: 'start', 
-                gradeClass: combinedClass, 
+                grade: grade,        // 학년 추가
+                stuClass: clsNum,    // 반 분리
                 stuNum: num, 
                 stuName: name 
             })
@@ -263,7 +263,7 @@
         startTimer();
     }
 
-    /** [기능 5] 회귀 분석 및 그래프 그리기 (삼각함수 로직 전면 개편) **/
+    /** [기능 5] 회귀 분석 및 그래프 그리기 (삼각함수 로직 유지) **/
     let chartInstance = null;
 
     function runAnalysis() {
@@ -291,7 +291,6 @@
             latexFormula = `\\( y = ${a} + ${b} \\ln(x) \\)`;
         } 
         else if(area === '삼각함수') {
-            // [스마트 삼각함수 알고리즘: 최댓값/최솟값 기반 코사인 모델링]
             let maxY = -Infinity, minY = Infinity;
             let xOfMax = 0, xOfMin = 0;
             
@@ -311,7 +310,6 @@
             let B = Math.PI / halfPeriod;
             let C = xOfMax; 
 
-            // 그래프를 그리기 위한 함수 객체 생성
             res = {
                 predict: function(x) {
                     return [x, A * Math.cos(B * (x - C)) + D];
@@ -326,7 +324,6 @@
             let signC = C >= 0 ? `-${C_f}` : `+${C_f}`;
             let signD = D >= 0 ? `+${D_f}` : `-${D_f}`;
             
-            // y = A cos(B(x - C)) + D 
             latexFormula = `\\( y = ${A_f} \\cos(${B_f}(x ${signC})) ${signD} \\)`;
         }
 
@@ -335,7 +332,7 @@
         MathJax.typesetPromise([formulaDiv]);
 
         document.getElementById('analysisArea').style.display = 'block';
-        drawChart(pts, res, area); // area 변수 전달
+        drawChart(pts, res, area);
         
         document.getElementById('analysisArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -348,7 +345,6 @@
         const maxX = Math.max(...pts.map(p=>p[0]));
         let range = maxX - minX === 0 ? 1 : maxX - minX;
         
-        // 삼각함수는 파동이 보이도록 좌우 여백을 넓게 잡아줍니다.
         let padding = area === '삼각함수' ? range * 0.5 : range * 0.1;
         let startX = minX - padding;
         let endX = maxX + padding;
@@ -369,11 +365,10 @@
         });
     }
 
-    /** [기능 6] 구글 시트에 모든 데이터 최종 제출 (학년/반 조합으로 수정) **/
+    /** [기능 6] 구글 시트에 모든 데이터 최종 제출 (학년/반 분리) **/
     async function saveToSheets(isForceSubmit = false) {
         const grade = document.getElementById('gradeSelect').value;
         const clsNum = document.getElementById('classSelect').value;
-        const combinedClass = `${grade}-${clsNum}`;
         const num = document.getElementById('stuNum').value;
         const studentKey = `submitted_${grade}_${clsNum}_${num}`;
 
@@ -398,8 +393,10 @@
         
         const refs = document.querySelectorAll('.ref');
 
+        // ✅ 학년, 반 분리해서 전송
         const payload = {
-            gradeClass: combinedClass,
+            grade: grade,
+            stuClass: clsNum,
             stuNum: num,
             stuName: document.getElementById('stuName').value,
             funcArea: document.getElementById('funcArea').value,
