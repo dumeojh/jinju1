@@ -3,13 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>교사용 실시간 현황 대시보드</title>
+    <title>안성여고 실시간 현황 대시보드</title>
     <style>
         :root { --primary: #2c3e50; --accent: #3498db; --bg: #f8f9fa; }
         body { font-family: 'Pretendard', sans-serif; background: var(--bg); padding: 20px; margin: 0; }
-        .container { max-width: 1100px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        h1 { color: var(--primary); text-align: center; margin-top: 0; border-bottom: 2px solid var(--accent); padding-bottom: 15px; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h1 { color: var(--primary); text-align: center; margin-top: 0; border-bottom: 2px solid var(--accent); padding-bottom: 15px; margin-bottom: 25px; }
         
+        /* 필터 섹션 스타일 */
+        .filter-section { 
+            background: #f1f4f8; 
+            padding: 20px; 
+            border-radius: 10px; 
+            margin-bottom: 20px; 
+            display: flex; 
+            gap: 15px; 
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .filter-group { display: flex; align-items: center; gap: 8px; }
+        .filter-group label { font-weight: bold; color: var(--primary); }
+        .filter-group select { 
+            padding: 8px 12px; 
+            border: 1px solid #cbd5e0; 
+            border-radius: 6px; 
+            background: white;
+            font-size: 1em;
+            cursor: pointer;
+        }
+
         .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; font-weight: bold; color: #555; }
         .refresh-btn { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .refresh-btn:hover { background: #2980b9; }
@@ -21,13 +43,40 @@
         
         .status-ing { color: #e67e22; font-weight: bold; background: #fdf2e9; padding: 5px 10px; border-radius: 20px; font-size: 0.9em; }
         .status-done { color: #27ae60; font-weight: bold; background: #e9f7ef; padding: 5px 10px; border-radius: 20px; font-size: 0.9em; }
+        
+        /* 필터링 결과 없음 메시지 */
+        .no-data { padding: 50px; color: #a0aec0; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>📊 수행평가 실시간 현황판</h1>
+    <h1>📊 안성여고 수행평가 실시간 현황판</h1>
     
+    <div class="filter-section">
+        <div class="filter-group">
+            <label>학년</label>
+            <select id="filterGrade" onchange="fetchData()">
+                <option value="all">전체</option>
+                <option value="1">1학년</option>
+                <option value="2">2학년</option>
+                <option value="3">3학년</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>반</label>
+            <select id="filterClass" onchange="fetchData()">
+                <option value="all">전체</option>
+                <option value="1">1반</option><option value="2">2반</option>
+                <option value="3">3반</option><option value="4">4반</option>
+                <option value="5">5반</option><option value="6">6반</option>
+                <option value="7">7반</option><option value="8">8반</option>
+                <option value="9">9반</option><option value="10">10반</option>
+                <option value="11">11반</option><option value="12">12반</option>
+            </select>
+        </div>
+    </div>
+
     <div class="status-header">
         <span id="lastUpdated">마지막 업데이트: 대기 중...</span>
         <div>
@@ -40,7 +89,7 @@
         <thead>
             <tr>
                 <th>시작 시간</th>
-                <th>반</th>
+                <th>반 정보</th>
                 <th>번호</th>
                 <th>이름</th>
                 <th>상태</th>
@@ -55,7 +104,6 @@
 </div>
 
 <script>
-    // 기존 스크립트 주소 뒤에 '?sheet=status'를 붙여 실시간현황 시트를 타겟팅합니다.
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYCiP26kpNm_dVm8W4rO3EBT5TfWF6ebZ3ZwmcKXZZ0xnu3ABZBCCyJA4BnNt73MnG/exec?sheet=status";
 
     async function fetchData() {
@@ -64,21 +112,43 @@
             const data = await response.json();
             
             const tbody = document.getElementById('tableBody');
+            
+            // 필터 값 가져오기
+            const selectedGrade = document.getElementById('filterGrade').value;
+            const selectedClass = document.getElementById('filterClass').value;
+
+            // 데이터 필터링 로직
+            const filteredData = data.filter(row => {
+                const rowValue = String(row['반'] || ""); // 예: "2-1" 또는 "1"
+                
+                // 학년 필터링 (rowValue가 "2-1" 형태일 때 앞자리 체크)
+                const gradeMatch = (selectedGrade === "all") || 
+                                   rowValue.startsWith(selectedGrade) || 
+                                   rowValue.includes(selectedGrade + "학년");
+
+                // 반 필터링 (rowValue가 "2-1" 형태일 때 뒷자리 체크, 혹은 단순 숫자 체크)
+                const classMatch = (selectedClass === "all") || 
+                                   rowValue.endsWith("-" + selectedClass) || 
+                                   rowValue.split("-")[1] === selectedClass ||
+                                   rowValue === selectedClass;
+
+                return gradeMatch && classMatch;
+            });
+
             tbody.innerHTML = ''; 
 
-            if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="padding:30px; color:#999;">아직 접속하여 시험을 시작한 학생이 없습니다.</td></tr>';
+            if (filteredData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="no-data">선택한 학년/반에 해당하는 진행 데이터가 없습니다.</td></tr>';
                 updateTime();
                 return;
             }
 
-            // 가장 최근에 조작한 사람이 위로 오게 하려면 배열을 뒤집을 수 있습니다. (선택사항)
-            // data.reverse(); 
+            // 최신 순으로 정렬 (선택 사항)
+            // filteredData.reverse();
 
-            data.forEach(row => {
+            filteredData.forEach(row => {
                 const tr = document.createElement('tr');
                 
-                // 시간 데이터 깔끔하게 포맷팅 (시:분:초)
                 const formatDate = (dateString) => {
                     if (!dateString) return "-";
                     const d = new Date(dateString);
@@ -86,7 +156,6 @@
                     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
                 };
 
-                // 구글 시트 1행의 이름과 일치해야 합니다.
                 let statusRaw = row['상태'] || '-';
                 let statusHtml = statusRaw;
                 if (statusRaw.includes('진행 중')) {
@@ -119,10 +188,7 @@
         document.getElementById('lastUpdated').innerText = `마지막 업데이트: ${now.toLocaleTimeString()}`;
     }
 
-    // 페이지 접속 시 즉시 1회 로드
     fetchData();
-
-    // 5초(5000ms)마다 백그라운드에서 자동 갱신
     setInterval(fetchData, 5000);
 </script>
 </body>
