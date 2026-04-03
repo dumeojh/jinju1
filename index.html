@@ -267,7 +267,10 @@
 
         document.getElementById('analysisArea').style.display = 'block';
         drawChart(pts, res);
-        window.scrollTo(0, document.body.scrollHeight);
+        
+        // --- 여기만 수정됨 ---
+        // 생성 후 5번 영역으로 부드럽게 스크롤 이동
+        document.getElementById('analysisArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function drawChart(pts, res) {
