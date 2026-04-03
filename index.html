@@ -134,13 +134,16 @@
 
             <div class="observation-box">
                 <label><b>(1) 그래프의 수학적 특징</b></label>
-                <textarea id="obs1" placeholder="해당 함수의 수학적 성질(증가/감소 여부, 점근선, 주기성 등)을 식과 그래프의 형태를 바탕으로 서술하시오."></textarea>
+                <div class="guide-box">해당 함수의 수학적 성질(증가/감소 여부, 점근선, 주기성 등)을 식과 그래프의 형태를 바탕으로 서술하시오.</div>
+                <textarea id="obs1" placeholder="이곳에 내용을 작성하세요..." rows="4"></textarea>
                 
                 <label style="margin-top:15px; display:block;"><b>(2) 실세계 현상 해석</b></label>
-                <textarea id="obs2" placeholder="산출된 함수식을 활용하여 현재의 추세를 분석하고, 특정 시점 (예: 5년 후, 10단위 후 등)의 미래 값을 예측하거나 해당 현상이 갖는 사회/과학적 의미를 수학적으로 추론하여 서술하시오."></textarea>
+                <div class="guide-box">산출된 함수식을 활용하여 현재의 추세를 분석하고, 특정 시점 (예: 5년 후, 10단위 후 등)의 미래 값을 예측하거나 해당 현상이 갖는 사회/과학적 의미를 수학적으로 추론하여 서술하시오.</div>
+                <textarea id="obs2" placeholder="이곳에 내용을 작성하세요..." rows="4"></textarea>
                 
                 <label style="margin-top:15px; display:block;"><b>(3) 수학적 유용성 및 가치 성찰</b></label>
-                <textarea id="obs3" placeholder="탐구 과정을 되돌아보며, 수학으로 현상을 모델링했을 때 얻을 수 있는 장점과 수학이 우리 삶에서 갖는 실질적인 가치에 대한 자신의 견해를 구체적으로 서술하시오."></textarea>
+                <div class="guide-box">탐구 과정을 되돌아보며, 수학으로 현상을 모델링했을 때 얻을 수 있는 장점과 수학이 우리 삶에서 갖는 실질적인 가치에 대한 자신의 견해를 구체적으로 서술하시오.</div>
+                <textarea id="obs3" placeholder="이곳에 내용을 작성하세요..." rows="4"></textarea>
             </div>
 
             <div class="no-print" style="display: flex; gap: 15px; margin-top: 45px;">
@@ -171,7 +174,7 @@
         grid.innerHTML += `<div class="data-item">#${i} <input type="number" class="ix" placeholder="x"> <input type="number" class="iy" placeholder="y"></div>`;
     }
 
-    /** [기능 3] 타이머 설정 (40분) **/
+    /** [기능 3] 타이머 설정 (45분) **/
     let examTime = 45 * 60;
     let timerInterval;
 
