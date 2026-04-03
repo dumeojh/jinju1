@@ -236,7 +236,7 @@
         startTimer();
     }
 
-    /** [기능 5] 회귀 분석 및 그래프 그리기 **/
+    /** [기능 5] 회귀 분석 및 그래프 그리기 (삼각함수 로직 전면 개편) **/
     let chartInstance = null;
 
     function runAnalysis() {
@@ -249,41 +249,93 @@
         pts.sort((a,b) => a[0] - b[0]);
 
         let res;
-        if(area === '지수함수') res = regression.exponential(pts);
-        else if(area === '로그함수') res = regression.logarithmic(pts);
-        else res = regression.polynomial(pts, {order:2});
-
-        const a = res.equation[0].toFixed(4);
-        const b = res.equation[1].toFixed(4);
         let latexFormula = "";
 
-        if(area === '지수함수') latexFormula = `\\( y = ${a} \\cdot e^{${b}x} \\)`;
-        else if(area === '로그함수') latexFormula = `\\( y = ${a} + ${b} \\ln(x) \\)`;
-        else latexFormula = `\\( y = ${a}x^2 + ${res.equation[1].toFixed(4)}x + ${res.equation[2].toFixed(4)} \\)`;
+        if(area === '지수함수') {
+            res = regression.exponential(pts);
+            const a = res.equation[0].toFixed(4);
+            const b = res.equation[1].toFixed(4);
+            latexFormula = `\\( y = ${a} \\cdot e^{${b}x} \\)`;
+        } 
+        else if(area === '로그함수') {
+            res = regression.logarithmic(pts);
+            const a = res.equation[0].toFixed(4);
+            const b = res.equation[1].toFixed(4);
+            latexFormula = `\\( y = ${a} + ${b} \\ln(x) \\)`;
+        } 
+        else if(area === '삼각함수') {
+            // [스마트 삼각함수 알고리즘: 최댓값/최솟값 기반 코사인 모델링]
+            let maxY = -Infinity, minY = Infinity;
+            let xOfMax = 0, xOfMin = 0;
+            
+            pts.forEach(p => {
+                if(p[1] > maxY) { maxY = p[1]; xOfMax = p[0]; }
+                if(p[1] < minY) { minY = p[1]; xOfMin = p[0]; }
+            });
+
+            if (maxY === minY || xOfMax === xOfMin) {
+                alert("삼각함수 분석을 위해서는 값이 다른 최소 2개(최고점, 최저점)의 데이터가 필요합니다.");
+                return;
+            }
+
+            let A = (maxY - minY) / 2;
+            let D = (maxY + minY) / 2;
+            let halfPeriod = Math.abs(xOfMax - xOfMin);
+            let B = Math.PI / halfPeriod;
+            let C = xOfMax; 
+
+            // 그래프를 그리기 위한 함수 객체 생성
+            res = {
+                predict: function(x) {
+                    return [x, A * Math.cos(B * (x - C)) + D];
+                }
+            };
+
+            const A_f = A.toFixed(4);
+            const B_f = B.toFixed(4);
+            const C_f = Math.abs(C).toFixed(4);
+            const D_f = Math.abs(D).toFixed(4);
+
+            let signC = C >= 0 ? `-${C_f}` : `+${C_f}`;
+            let signD = D >= 0 ? `+${D_f}` : `-${D_f}`;
+            
+            // y = A cos(B(x - C)) + D 
+            latexFormula = `\\( y = ${A_f} \\cos(${B_f}(x ${signC})) ${signD} \\)`;
+        }
 
         const formulaDiv = document.getElementById('outFormula');
         formulaDiv.innerHTML = `<b>산출된 함수식</b><br>${latexFormula}`;
         MathJax.typesetPromise([formulaDiv]);
 
         document.getElementById('analysisArea').style.display = 'block';
-        drawChart(pts, res);
+        drawChart(pts, res, area); // area 변수 전달
         
-        // --- 여기만 수정됨 ---
-        // 생성 후 5번 영역으로 부드럽게 스크롤 이동
         document.getElementById('analysisArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function drawChart(pts, res) {
+    function drawChart(pts, res, area) {
         const ctx = document.getElementById('mainChart').getContext('2d');
         if(chartInstance) chartInstance.destroy();
-        const minX = Math.min(...pts.map(p=>p[0])), maxX = Math.max(...pts.map(p=>p[0]));
+        
+        const minX = Math.min(...pts.map(p=>p[0]));
+        const maxX = Math.max(...pts.map(p=>p[0]));
+        let range = maxX - minX === 0 ? 1 : maxX - minX;
+        
+        // 삼각함수는 파동이 보이도록 좌우 여백을 넓게 잡아줍니다.
+        let padding = area === '삼각함수' ? range * 0.5 : range * 0.1;
+        let startX = minX - padding;
+        let endX = maxX + padding;
+        
         let trend = [];
-        for(let x=minX; x<=maxX; x+=(maxX-minX)/50) trend.push({x:x, y:res.predict(x)[1]});
+        for(let x = startX; x <= endX; x += (endX - startX) / 100) {
+            trend.push({x: x, y: res.predict(x)[1]});
+        }
+
         chartInstance = new Chart(ctx, {
             data: {
                 datasets: [
                     { type:'scatter', label:'수집 데이터', data:pts.map(p=>({x:p[0], y:p[1]})), backgroundColor:'#3498db', pointRadius:5 },
-                    { type:'line', label:'추세선', data:trend, borderColor:'#e74c3c', borderWidth:3, pointRadius:0, fill:false }
+                    { type:'line', label:'추세선', data:trend, borderColor:'#e74c3c', borderWidth:3, pointRadius:0, fill:false, tension: 0.4 } 
                 ]
             },
             options: { scales: { x:{type:'linear', position:'bottom'}, y:{type:'linear'} } }
