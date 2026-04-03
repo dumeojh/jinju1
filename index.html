@@ -16,6 +16,10 @@
         .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
         .user-sticky { background: #eef2f7; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; display: none; font-weight: bold; border-left: 5px solid var(--accent); font-size: 1.1em; color: #2c3e50; position: sticky; top: 10px; z-index: 100; }
         
+        /* 깜빡임 애니메이션 (종료 5분 전 효과) */
+        @keyframes blink { 50% { opacity: 0; } }
+        .blink-anim { animation: blink 1s infinite; }
+
         /* 초기 인증 섹션 */
         #authSection { text-align: center; padding: 40px 10px; }
         .auth-box { display: inline-block; text-align: left; background: #fff; padding: 30px; border: 2px solid var(--accent); border-radius: 15px; width: 100%; max-width: 420px; }
@@ -55,10 +59,13 @@
 <body>
 
 <div class="container">
-    <div id="stickyHeader" class="user-sticky">📍 [수행평가 진행 중] <span id="displayInfo"></span></div>
+    <div id="stickyHeader" class="user-sticky">
+        📍 [수행평가 진행 중] <span id="displayInfo"></span>
+        <span id="timerDisplay" style="float:right; color:#e74c3c; font-weight:bold;"></span>
+    </div>
 
     <div id="authSection" class="no-print">
-        <h1>📉 함수 기사문 작성하기 </h1>
+        <h1>📉 함수 기사문 작성하기</h1>
         <div class="auth-box">
             <div class="auth-row">
                 <label>반 선택</label>
@@ -157,7 +164,6 @@
     examChannel.postMessage('check_open');
 
     /** [기능 2] 환경 설정 및 초기화 **/
-    // [중요] 배포한 구글 앱스 스크립트 URL을 여기에 붙여넣으세요!
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwD0_5Uw88zfgJeIDblIN2vCLHinI8FFGGDP8PpxS3m5cy3ZFfRaZ5zaTIQGbbWGMkp/exec";
     
     // 데이터 입력란 10개 자동 생성
@@ -166,21 +172,69 @@
         grid.innerHTML += `<div class="data-item">#${i} <input type="number" class="ix" placeholder="x"> <input type="number" class="iy" placeholder="y"></div>`;
     }
 
-    /** [기능 3] 시험 시작 **/
+    /** [기능 3] 타이머 설정 (40분) **/
+    let examTime = 40 * 60; // 40분을 초 단위로 변환
+    let timerInterval;
+
+    function startTimer() {
+        const timerDisplay = document.getElementById('timerDisplay');
+        
+        timerInterval = setInterval(() => {
+            let minutes = Math.floor(examTime / 60);
+            let seconds = examTime % 60;
+            
+            // 00:00 포맷 유지
+            minutes = minutes < 10 ? "0" + minutes : minutes;
+            seconds = seconds < 10 ? "0" + seconds : seconds;
+            
+            timerDisplay.innerText = `⏳ 남은 시간: ${minutes}:${seconds}`;
+            
+            // 종료 5분 전 알림 및 시각 효과
+            if (examTime === 5 * 60) {
+                alert("⚠️ 시험 종료 5분 전입니다. 제출을 준비해 주세요.");
+                timerDisplay.classList.add("blink-anim"); // 글자 깜빡임 효과 추가
+            }
+
+            // 시간 초과 시 자동 제출
+            if (examTime <= 0) {
+                clearInterval(timerInterval);
+                timerDisplay.innerText = "⏳ 시험 종료";
+                timerDisplay.classList.remove("blink-anim");
+                alert("⏰ 시험 시간이 종료되었습니다! 현재까지 작성된 내용으로 자동 제출됩니다.");
+                
+                // true를 전달하여 확인창 없이 강제 제출
+                saveToSheets(true); 
+            }
+            
+            examTime--;
+        }, 1000);
+    }
+
+    /** [기능 4] 시험 시작 **/
     function startExam() {
         const cls = document.getElementById('gradeClass').value;
         const num = document.getElementById('stuNum').value;
         const name = document.getElementById('stuName').value;
         const area = document.getElementById('funcArea').value;
+        
+        // 입력값 확인 및 중복 검사
         if(!cls || !num || !name || !area) { alert("항목을 모두 입력하세요."); return; }
+        
+        const studentKey = `submitted_${cls.replace('2-', '')}_${num}`;
+        if(localStorage.getItem(studentKey)) {
+            alert("🚨 이미 제출이 완료된 학번입니다. 중복 제출은 불가능합니다.");
+            return;
+        }
         
         document.getElementById('authSection').style.display = 'none';
         document.getElementById('mainContent').style.display = 'block';
         document.getElementById('stickyHeader').style.display = 'block';
         document.getElementById('displayInfo').innerText = `${cls} ${num}번 ${name} (영역: ${area})`;
+        
+        startTimer(); // 시험 시작과 동시에 타이머 작동
     }
 
-    /** [기능 4] 회귀 분석 및 그래프 그리기 **/
+    /** [기능 5] 회귀 분석 및 그래프 그리기 **/
     let chartInstance = null;
 
     function runAnalysis() {
@@ -231,27 +285,38 @@
         });
     }
 
-    /** [기능 5] 구글 시트에 모든 데이터 최종 제출 **/
-    async function saveToSheets() {
+    /** [기능 6] 구글 시트에 모든 데이터 최종 제출 **/
+    async function saveToSheets(isForceSubmit = false) {
+        const cls = document.getElementById('gradeClass').value.replace('2-', '');
+        const num = document.getElementById('stuNum').value;
+        const studentKey = `submitted_${cls}_${num}`;
+
+        // 이미 제출한 내역이 있는지 로컬 스토리지 확인
+        if(localStorage.getItem(studentKey)) {
+            alert("🚨 이미 제출이 완료된 학번입니다. 중복 제출은 불가능합니다.");
+            return;
+        }
+
         const btn = document.getElementById('saveBtn');
-        if(!confirm("최종 제출하시겠습니까? 제출 후에는 수정이 불가능합니다.")) return;
+        
+        // 타이머에 의한 자동 제출이 아닐 경우에만 확인창 띄우기
+        if(!isForceSubmit) {
+            if(!confirm("최종 제출하시겠습니까? 제출 후에는 수정이 불가능합니다.")) return;
+        }
         
         btn.disabled = true; btn.innerText = "제출 중...";
 
-        // 1. 입력 원본 데이터 (x, y) 묶기
         let ptsArr = [];
         const xs = document.querySelectorAll('.ix'), ys = document.querySelectorAll('.iy');
         for(let i=0; i<10; i++) {
             if(xs[i].value && ys[i].value) ptsArr.push(`(${xs[i].value}, ${ys[i].value})`);
         }
         
-        // 2. 참고자료 가져오기
         const refs = document.querySelectorAll('.ref');
 
-        // 3. 전송용 데이터 묶기 (Payload)
         const payload = {
-            gradeClass: document.getElementById('gradeClass').value.replace('2-', ''),
-            stuNum: document.getElementById('stuNum').value,
+            gradeClass: cls,
+            stuNum: num,
             stuName: document.getElementById('stuName').value,
             funcArea: document.getElementById('funcArea').value,
             articleTitle: document.getElementById('articleTitle').value,
@@ -269,12 +334,21 @@
         try {
             await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
-                mode: 'no-cors', // CORS 정책 우회
+                mode: 'no-cors', // CORS 우회 유지
                 body: JSON.stringify(payload)
             });
+            
+            // 제출 성공 시 로컬 스토리지에 기록 저장하여 재제출 방지
+            localStorage.setItem(studentKey, 'true');
+            
             alert("✅ 성공적으로 제출되었습니다!");
             btn.innerText = "제출 완료"; btn.style.background = "#2ecc71";
             btn.onclick = null;
+            
+            // 타이머 정지
+            clearInterval(timerInterval);
+            document.getElementById('timerDisplay').innerText = "✅ 제출 완료";
+            
         } catch (e) {
             alert("❌ 오류가 발생했습니다. 화면을 캡처한 후 선생님께 문의하세요.");
             btn.disabled = false; btn.innerText = "다시 제출";
