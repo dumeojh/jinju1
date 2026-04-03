@@ -68,13 +68,24 @@
         <h1>📉 함수 기사문 작성하기</h1>
         <div class="auth-box">
             <div class="auth-row">
-                <label>반 선택</label>
-                <select id="gradeClass">
-                    <option value="">-- 반 선택 --</option>
-                    <option value="2-1">2학년 1반</option><option value="2-2">2학년 2반</option>
-                    <option value="2-3">2학년 3반</option><option value="2-4">2학년 4반</option>
-                    <option value="2-5">2학년 5반</option><option value="2-6">2학년 6반</option>
-                </select>
+                <label>학년 및 반 선택</label>
+                <div style="display:flex; gap:10px;">
+                    <select id="gradeSelect">
+                        <option value="">-- 학년 --</option>
+                        <option value="1">1학년</option>
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    </select>
+                    <select id="classSelect">
+                        <option value="">-- 반 --</option>
+                        <option value="1">1반</option><option value="2">2반</option>
+                        <option value="3">3반</option><option value="4">4반</option>
+                        <option value="5">5반</option><option value="6">6반</option>
+                        <option value="7">7반</option><option value="8">8반</option>
+                        <option value="9">9반</option><option value="10">10반</option>
+                        <option value="11">11반</option><option value="12">12반</option>
+                    </select>
+                </div>
             </div>
             <div class="auth-row">
                 <label>번호 및 이름</label>
@@ -213,17 +224,19 @@
         }, 1000);
     }
 
-/** [기능 4] 시험 시작 **/
+/** [기능 4] 시험 시작 (학년/반 조합으로 수정) **/
     function startExam() {
-        const cls = document.getElementById('gradeClass').value;
+        const grade = document.getElementById('gradeSelect').value;
+        const clsNum = document.getElementById('classSelect').value;
         const num = document.getElementById('stuNum').value;
         const name = document.getElementById('stuName').value;
         const area = document.getElementById('funcArea').value;
         
-        if(!cls || !num || !name || !area) { alert("항목을 모두 입력하세요."); return; }
+        if(!grade || !clsNum || !num || !name || !area) { alert("항목을 모두 입력하세요."); return; }
         
-        const cleanCls = cls.replace('2-', '');
-        const studentKey = `submitted_${cleanCls}_${num}`;
+        const combinedClass = `${grade}-${clsNum}`; // 예: "1-3", "2-5"
+        const studentKey = `submitted_${grade}_${clsNum}_${num}`;
+        
         if(localStorage.getItem(studentKey)) {
             alert("🚨 이미 제출이 완료된 학번입니다. 중복 제출은 불가능합니다.");
             return;
@@ -232,15 +245,15 @@
         document.getElementById('authSection').style.display = 'none';
         document.getElementById('mainContent').style.display = 'block';
         document.getElementById('stickyHeader').style.display = 'block';
-        document.getElementById('displayInfo').innerText = `${cls} ${num}번 ${name} (영역: ${area})`;
+        document.getElementById('displayInfo').innerText = `${grade}학년 ${clsNum}반 ${num}번 ${name} (영역: ${area})`;
         
-        // --- ✅ 추가된 부분: 시험 시작 버튼을 누르자마자 서버에 '시작' 신호 발송 ---
+        // --- ✅ 서버에 '시작' 신호 발송 ---
         fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             body: JSON.stringify({ 
                 action: 'start', 
-                gradeClass: cleanCls, 
+                gradeClass: combinedClass, 
                 stuNum: num, 
                 stuName: name 
             })
@@ -356,11 +369,13 @@
         });
     }
 
-    /** [기능 6] 구글 시트에 모든 데이터 최종 제출 **/
+    /** [기능 6] 구글 시트에 모든 데이터 최종 제출 (학년/반 조합으로 수정) **/
     async function saveToSheets(isForceSubmit = false) {
-        const cls = document.getElementById('gradeClass').value.replace('2-', '');
+        const grade = document.getElementById('gradeSelect').value;
+        const clsNum = document.getElementById('classSelect').value;
+        const combinedClass = `${grade}-${clsNum}`;
         const num = document.getElementById('stuNum').value;
-        const studentKey = `submitted_${cls}_${num}`;
+        const studentKey = `submitted_${grade}_${clsNum}_${num}`;
 
         if(localStorage.getItem(studentKey)) {
             alert("🚨 이미 제출이 완료된 학번입니다. 중복 제출은 불가능합니다.");
@@ -384,7 +399,7 @@
         const refs = document.querySelectorAll('.ref');
 
         const payload = {
-            gradeClass: cls,
+            gradeClass: combinedClass,
             stuNum: num,
             stuName: document.getElementById('stuName').value,
             funcArea: document.getElementById('funcArea').value,
