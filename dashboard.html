@@ -64,19 +64,6 @@
         </div>
 
         <div class="filter-group">
-            <label>과목</label>
-            <select id="filterSubject" onchange="fetchData()">
-                <option value="">-- 전체 --</option>
-                <option value="국어">국어</option>
-                <option value="영어">영어</option>
-                <option value="수학">수학</option>
-                <option value="사회">사회</option>
-                <option value="과학">과학</option>
-                <option value="정보">정보</option>
-            </select>
-        </div>
-
-        <div class="filter-group">
             <label>학년</label>
             <select id="filterGrade" onchange="fetchData()">
                 <option value="">-- 선택 --</option>
@@ -153,7 +140,6 @@
 
     async function fetchData() {
         const selectedDate = document.getElementById('filterDate').value; 
-        const selectedSubject = document.getElementById('filterSubject').value; 
         const selectedGrade = document.getElementById('filterGrade').value;
         const selectedClass = document.getElementById('filterClass').value;
         const tbody = document.getElementById('tableBody');
@@ -168,19 +154,17 @@
             const response = await fetch(GOOGLE_SCRIPT_URL);
             const data = await response.json();
             
-            // 1. 선택한 날짜, 과목, 학년, 반 데이터만 필터링
+            // 1. 선택한 날짜, 학년, 반 데이터만 필터링
             const classData = data.filter(row => {
                 const rowGrade = String(row['학년'] || "");
                 const rowClass = String(row['반'] || "");
                 const rowDate = extractDateString(row['시작시간'] || row['시작 시간']); 
-                const rowSubject = String(row['과목'] || ""); 
                 
                 const matchGrade = (rowGrade === selectedGrade || rowGrade === selectedGrade + "학년");
                 const matchClass = (rowClass === selectedClass || rowClass === selectedClass + "반");
                 const matchDate = selectedDate ? (rowDate === selectedDate) : true; 
-                const matchSubject = selectedSubject ? rowSubject.includes(selectedSubject) : true; 
 
-                return matchGrade && matchClass && matchDate && matchSubject;
+                return matchGrade && matchClass && matchDate;
             });
 
             // 2. 번호를 기준으로 데이터 매핑 (중복일 경우 나중 데이터 덮어쓰기)
