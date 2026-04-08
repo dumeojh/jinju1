@@ -459,11 +459,18 @@
         const btn = document.getElementById('saveBtn');
         
         if(!isForceSubmit) {
-            if(!confirm("최종 제출하시겠습니까? 제출 후에는 수정이 불가능합니다.")) return;
+            // 🚨 [수정] 제출 확인 창(confirm)이 뜰 때 포커스 이탈로 감지되는 것을 방지
+            isExamStarted = false; // 창이 뜨기 전 감지 시스템 임시 정지
+            
+            if(!confirm("최종 제출하시겠습니까? 제출 후에는 수정이 불가능합니다.")) {
+                // 취소를 누른 경우, 0.5초 뒤에 다시 감지 시스템 가동 (창이 완전히 닫히고 포커스 돌아올 시간 확보)
+                setTimeout(() => { isExamStarted = true; }, 500); 
+                return;
+            }
         }
         
         btn.disabled = true; btn.innerText = "제출 중...";
-        isExamStarted = false; 
+        isExamStarted = false; // 제출 중에는 감지 완전 중지
 
         let ptsArr = [];
         const xs = document.querySelectorAll('.ix'), ys = document.querySelectorAll('.iy');
