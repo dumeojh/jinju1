@@ -162,9 +162,28 @@
                 return matchGrade && matchClass && matchDate;
             });
 
+            // 💡 핵심 수정: 최신 데이터로 덮어쓰되, '경고 기록'은 절대 지워지지 않도록 누적 보존합니다.
             const studentMap = {};
             classData.forEach(row => {
-                studentMap[parseInt(row['번호'])] = row;
+                const num = parseInt(row['번호']);
+                let prevWarning = "";
+
+                // 이전에 저장된 데이터(과거 시점의 줄)가 있다면 최고 단계 경고를 기억합니다.
+                if (studentMap[num]) {
+                    let existingRemark = studentMap[num]['비고'] || "";
+                    if (existingRemark.includes("강제제출")) prevWarning = "강제제출";
+                    else if (existingRemark.includes("2차경고")) prevWarning = "2차경고";
+                    else if (existingRemark.includes("1차경고")) prevWarning = "1차경고";
+                }
+
+                // 종료시간 등을 업데이트하기 위해 객체를 최신 데이터로 덮어씁니다.
+                studentMap[num] = { ...row };
+
+                // 만약 과거에 경고를 받은 적이 있는데, 최신 비고란(예: '정상제출')에 그 기록이 빠져있다면 강제로 합쳐줍니다.
+                let currentRemark = studentMap[num]['비고'] || "";
+                if (prevWarning && !currentRemark.includes(prevWarning)) {
+                    studentMap[num]['비고'] = prevWarning + " / " + currentRemark;
+                }
             });
 
             tbody.innerHTML = ''; 
@@ -185,7 +204,7 @@
                     let rawRemark = student['비고'] || '';
                     let displayRemark = "정상상태";
 
-                    // 💡 핵심 추가: 진행 상황과 비고란 데이터를 조합하여 구체적인 문장 생성
+                    // 경고 누적을 확인하여 최종 문구를 결정합니다.
                     if (rawRemark.includes("강제제출")) {
                         displayRemark = "🚨 3회 화면이탈 (강제제출)";
                     } else if (rawRemark.includes("시간초과")) {
@@ -240,13 +259,12 @@
         return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
     }
 
-    // 💡 변경: 구체화된 문장에 맞추어 색상이 올바르게 표시되도록 수정
     function getRemarkColor(remark) {
         if (remark.includes("강제제출")) return "#e74c3c"; // 아웃: 빨강
         if (remark.includes("시간초과")) return "#8e44ad"; // 초과: 보라
         if (remark.includes("2회 이탈")) return "#e67e22"; // 위험: 주황
         if (remark.includes("1회 이탈")) return "#d35400"; // 주의: 진한 주황/노랑
-        if (remark.includes("정상제출") || remark.includes("진행 중")) return "#27ae60"; // 정상: 초록
+        if (remark.includes("무결점") || remark.includes("진행 중")) return "#27ae60"; // 정상: 초록
         return "#555"; 
     }
 
