@@ -117,6 +117,10 @@
 <script>
     const GOOGLE_SCRIPT_URL = BASE_SCRIPT_URL + "?sheet=status";
 
+    // 💡 핵심 추가: 브라우저에 경고 기록을 영구 보존하는 블랙박스 변수
+    const HISTORY_KEY = 'anseong_dashboard_warnings_v2';
+    let globalWarningMap = JSON.parse(localStorage.getItem(HISTORY_KEY)) || {};
+
     document.addEventListener("DOMContentLoaded", () => {
         const today = new Date();
         const year = today.getFullYear();
@@ -162,28 +166,34 @@
                 return matchGrade && matchClass && matchDate;
             });
 
-            // 💡 핵심 수정: 최신 데이터로 덮어쓰되, '경고 기록'은 절대 지워지지 않도록 누적 보존합니다.
+            // 💡 블랙박스 기록 업데이트: 데이터를 불러올 때마다 경고 내역을 기억합니다.
+            classData.forEach(row => {
+                const grade = String(row['학년'] || "").replace('학년', '');
+                const cls = String(row['반'] || "").replace('반', '');
+                const num = parseInt(row['번호']);
+                const startTime = row['시작시간'] || row['시작 시간'] || "unknown";
+                
+                // 학생을 식별하는 고유 키 (재시험 시 시작시간이 다르므로 억울한 기록 누적 방지)
+                const sessionKey = `${grade}_${cls}_${num}_${startTime}`;
+
+                if (!globalWarningMap[sessionKey]) {
+                    globalWarningMap[sessionKey] = 0; // 0: 정상, 1: 1차, 2: 2차, 3: 강제제출
+                }
+
+                const remark = row['비고'] || "";
+                
+                // 최고 단계의 경고 기록을 계속 갱신하여 저장합니다.
+                if (remark.includes("강제제출")) globalWarningMap[sessionKey] = 3;
+                else if (remark.includes("2차경고") && globalWarningMap[sessionKey] < 2) globalWarningMap[sessionKey] = 2;
+                else if (remark.includes("1차경고") && globalWarningMap[sessionKey] < 1) globalWarningMap[sessionKey] = 1;
+            });
+
+            // 브라우저에 저장하여 대시보드 새로고침 시에도 기록 유지
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(globalWarningMap));
+
             const studentMap = {};
             classData.forEach(row => {
-                const num = parseInt(row['번호']);
-                let prevWarning = "";
-
-                // 이전에 저장된 데이터(과거 시점의 줄)가 있다면 최고 단계 경고를 기억합니다.
-                if (studentMap[num]) {
-                    let existingRemark = studentMap[num]['비고'] || "";
-                    if (existingRemark.includes("강제제출")) prevWarning = "강제제출";
-                    else if (existingRemark.includes("2차경고")) prevWarning = "2차경고";
-                    else if (existingRemark.includes("1차경고")) prevWarning = "1차경고";
-                }
-
-                // 종료시간 등을 업데이트하기 위해 객체를 최신 데이터로 덮어씁니다.
-                studentMap[num] = { ...row };
-
-                // 만약 과거에 경고를 받은 적이 있는데, 최신 비고란(예: '정상제출')에 그 기록이 빠져있다면 강제로 합쳐줍니다.
-                let currentRemark = studentMap[num]['비고'] || "";
-                if (prevWarning && !currentRemark.includes(prevWarning)) {
-                    studentMap[num]['비고'] = prevWarning + " / " + currentRemark;
-                }
+                studentMap[parseInt(row['번호'])] = row;
             });
 
             tbody.innerHTML = ''; 
@@ -202,16 +212,25 @@
                         : `<span class="status-done">🔵 제출 완료</span>`;
 
                     let rawRemark = student['비고'] || '';
+                    
+                    // 💡 구글 시트 데이터 대신 블랙박스 메모리(maxWarning)에서 경고 여부를 꺼내옵니다.
+                    const grade = String(student['학년'] || "").replace('학년', '');
+                    const cls = String(student['반'] || "").replace('반', '');
+                    const startTime = student['시작시간'] || student['시작 시간'] || "unknown";
+                    const sessionKey = `${grade}_${cls}_${i}_${startTime}`;
+                    const maxWarning = globalWarningMap[sessionKey] || 0;
+
                     let displayRemark = "정상상태";
 
-                    // 경고 누적을 확인하여 최종 문구를 결정합니다.
-                    if (rawRemark.includes("강제제출")) {
+                    if (rawRemark.includes("강제제출") || maxWarning === 3) {
                         displayRemark = "🚨 3회 화면이탈 (강제제출)";
                     } else if (rawRemark.includes("시간초과")) {
                         displayRemark = "⏳ 시간초과 (자동제출)";
-                    } else if (rawRemark.includes("2차경고")) {
+                    } else if (maxWarning === 2) {
+                        // 구글 시트는 '정상제출'로 지워졌더라도 블랙박스 메모리에 2차경고가 있으면 이 문구 출력!
                         displayRemark = isDone ? "⚠️ 2회 이탈 후 정상제출" : "⚠️ 2회 화면이탈 (위험)";
-                    } else if (rawRemark.includes("1차경고")) {
+                    } else if (maxWarning === 1) {
+                        // 구글 시트는 '정상제출'로 지워졌더라도 블랙박스 메모리에 1차경고가 있으면 이 문구 출력!
                         displayRemark = isDone ? "⚠️ 1회 이탈 후 정상제출" : "⚠️ 1회 화면이탈 (주의)";
                     } else if (rawRemark.includes("정상제출") || (isDone && (rawRemark === "" || rawRemark === "정상상태"))) {
                         displayRemark = "✅ 무결점 정상제출";
