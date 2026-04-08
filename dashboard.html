@@ -117,7 +117,6 @@
 <script>
     const GOOGLE_SCRIPT_URL = BASE_SCRIPT_URL + "?sheet=status";
 
-    // 💡 핵심 추가: 브라우저에 경고 기록을 영구 보존하는 블랙박스 변수
     const HISTORY_KEY = 'anseong_dashboard_warnings_v2';
     let globalWarningMap = JSON.parse(localStorage.getItem(HISTORY_KEY)) || {};
 
@@ -138,7 +137,8 @@
         const day = String(d.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     }
-async function fetchData() {
+
+    async function fetchData() {
         const selectedDate = document.getElementById('filterDate').value; 
         const selectedGrade = document.getElementById('filterGrade').value;
         const selectedClass = document.getElementById('filterClass').value;
@@ -165,7 +165,6 @@ async function fetchData() {
                 return matchGrade && matchClass && matchDate;
             });
 
-            // 💡 추가된 부분: 학생별 응시 횟수를 카운트합니다.
             const attemptCounts = {};
 
             classData.forEach(row => {
@@ -198,6 +197,8 @@ async function fetchData() {
             });
 
             tbody.innerHTML = ''; 
+            
+            // 1번부터 35번까지 기본 지정석 렌더링
             for (let i = 1; i <= 35; i++) {
                 const student = studentMap[i];
                 const tr = document.createElement('tr');
@@ -238,7 +239,6 @@ async function fetchData() {
                         displayRemark = rawRemark || "정상상태";
                     }
                     
-                    // 💡 추가된 부분: 응시 횟수가 2회 이상이면 이름 아래에 뱃지를 달아줍니다.
                     let attemptBadge = attemptCounts[i] > 1 
                         ? `<br><span style="font-size:0.8em; color:#8e44ad; font-weight:bold;">(🔄 총 ${attemptCounts[i]}회 응시)</span>` 
                         : "";
@@ -266,6 +266,75 @@ async function fetchData() {
                 }
                 tbody.appendChild(tr);
             }
+
+            // 💡 핵심 추가: 35번 초과 또는 잘못된 번호 입력자 추가 렌더링
+            const errorNums = Object.keys(studentMap)
+                .map(Number)
+                .filter(n => n > 35 || n < 1)
+                .sort((a, b) => a - b);
+
+            if (errorNums.length > 0) {
+                // 구분선(경고 바) 추가
+                const trSep = document.createElement('tr');
+                trSep.innerHTML = `<td colspan="7" style="background:#ffeaa7; color:#d35400; font-weight:bold; letter-spacing:1px; padding: 15px;">⚠️ 번호 입력 오류 학생 (확인 필요)</td>`;
+                tbody.appendChild(trSep);
+
+                // 오류 학생 리스트 추가 (배경색을 살짝 노란빛으로 하여 구별)
+                errorNums.forEach(num => {
+                    const student = studentMap[num];
+                    const tr = document.createElement('tr');
+                    tr.className = 'row-active';
+                    tr.style.backgroundColor = '#fff9e6'; // 연한 노란색 배경
+
+                    let statusRaw = student['상태'] || '-';
+                    let isDone = statusRaw.includes('제출 완료');
+                    
+                    let statusHtml = statusRaw.includes('진행 중') 
+                        ? `<span class="status-ing">🟢 진행 중</span>` 
+                        : `<span class="status-done">🔵 제출 완료</span>`;
+
+                    let rawRemark = student['비고'] || '';
+                    
+                    const grade = String(student['학년'] || "").replace('학년', '');
+                    const cls = String(student['반'] || "").replace('반', '');
+                    const startTime = student['시작시간'] || student['시작 시간'] || "unknown";
+                    const sessionKey = `${grade}_${cls}_${num}_${startTime}`;
+                    const maxWarning = globalWarningMap[sessionKey] || 0;
+
+                    let displayRemark = "정상상태";
+
+                    if (rawRemark.includes("강제제출") || maxWarning === 3) {
+                        displayRemark = "🚨 3회 화면이탈 (강제제출)";
+                    } else if (rawRemark.includes("시간초과")) {
+                        displayRemark = "⏳ 시간초과 (자동제출)";
+                    } else if (maxWarning === 2) {
+                        displayRemark = isDone ? "⚠️ 2회 이탈 후 정상제출" : "⚠️ 2회 화면이탈 (위험)";
+                    } else if (maxWarning === 1) {
+                        displayRemark = isDone ? "⚠️ 1회 이탈 후 정상제출" : "⚠️ 1회 화면이탈 (주의)";
+                    } else if (rawRemark.includes("정상제출") || (isDone && (rawRemark === "" || rawRemark === "정상상태"))) {
+                        displayRemark = "✅ 무결점 정상제출";
+                    } else if (statusRaw.includes("진행 중")) {
+                        displayRemark = "🟢 정상 진행 중";
+                    } else {
+                        displayRemark = rawRemark || "정상상태";
+                    }
+                    
+                    let attemptBadge = attemptCounts[num] > 1 
+                        ? `<br><span style="font-size:0.8em; color:#8e44ad; font-weight:bold;">(🔄 총 ${attemptCounts[num]}회 응시)</span>` 
+                        : "";
+
+                    tr.innerHTML = `
+                        <td><b style="color:#e74c3c; font-size:1.1em;">${num}</b></td>
+                        <td>${student['이름'] || '-'}${attemptBadge}</td>
+                        <td>${statusHtml}</td>
+                        <td>${formatDate(student['시작시간'] || student['시작 시간'])}</td>
+                        <td>${formatDate(student['종료시간'] || student['종료 시간'])}</td>
+                        <td>${student['소요시간'] || student['소요 시간'] || '-'}</td>
+                        <td style="font-weight:bold; color:${getRemarkColor(displayRemark)};">${displayRemark}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
             
             updateTime();
         } catch (error) {
@@ -273,6 +342,7 @@ async function fetchData() {
             document.getElementById('lastUpdated').innerText = "데이터 갱신 오류";
         }
     }
+    
     function formatDate(dateString) {
         if (!dateString || dateString === "-") return "-";
         const d = new Date(dateString);
