@@ -138,8 +138,7 @@
         const day = String(d.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     }
-
-    async function fetchData() {
+async function fetchData() {
         const selectedDate = document.getElementById('filterDate').value; 
         const selectedGrade = document.getElementById('filterGrade').value;
         const selectedClass = document.getElementById('filterClass').value;
@@ -166,29 +165,31 @@
                 return matchGrade && matchClass && matchDate;
             });
 
-            // 💡 블랙박스 기록 업데이트: 데이터를 불러올 때마다 경고 내역을 기억합니다.
+            // 💡 추가된 부분: 학생별 응시 횟수를 카운트합니다.
+            const attemptCounts = {};
+
             classData.forEach(row => {
                 const grade = String(row['학년'] || "").replace('학년', '');
                 const cls = String(row['반'] || "").replace('반', '');
                 const num = parseInt(row['번호']);
                 const startTime = row['시작시간'] || row['시작 시간'] || "unknown";
                 
-                // 학생을 식별하는 고유 키 (재시험 시 시작시간이 다르므로 억울한 기록 누적 방지)
                 const sessionKey = `${grade}_${cls}_${num}_${startTime}`;
 
+                // 응시 횟수 1씩 증가
+                attemptCounts[num] = (attemptCounts[num] || 0) + 1;
+
                 if (!globalWarningMap[sessionKey]) {
-                    globalWarningMap[sessionKey] = 0; // 0: 정상, 1: 1차, 2: 2차, 3: 강제제출
+                    globalWarningMap[sessionKey] = 0; 
                 }
 
                 const remark = row['비고'] || "";
                 
-                // 최고 단계의 경고 기록을 계속 갱신하여 저장합니다.
                 if (remark.includes("강제제출")) globalWarningMap[sessionKey] = 3;
                 else if (remark.includes("2차경고") && globalWarningMap[sessionKey] < 2) globalWarningMap[sessionKey] = 2;
                 else if (remark.includes("1차경고") && globalWarningMap[sessionKey] < 1) globalWarningMap[sessionKey] = 1;
             });
 
-            // 브라우저에 저장하여 대시보드 새로고침 시에도 기록 유지
             localStorage.setItem(HISTORY_KEY, JSON.stringify(globalWarningMap));
 
             const studentMap = {};
@@ -213,7 +214,6 @@
 
                     let rawRemark = student['비고'] || '';
                     
-                    // 💡 구글 시트 데이터 대신 블랙박스 메모리(maxWarning)에서 경고 여부를 꺼내옵니다.
                     const grade = String(student['학년'] || "").replace('학년', '');
                     const cls = String(student['반'] || "").replace('반', '');
                     const startTime = student['시작시간'] || student['시작 시간'] || "unknown";
@@ -227,10 +227,8 @@
                     } else if (rawRemark.includes("시간초과")) {
                         displayRemark = "⏳ 시간초과 (자동제출)";
                     } else if (maxWarning === 2) {
-                        // 구글 시트는 '정상제출'로 지워졌더라도 블랙박스 메모리에 2차경고가 있으면 이 문구 출력!
                         displayRemark = isDone ? "⚠️ 2회 이탈 후 정상제출" : "⚠️ 2회 화면이탈 (위험)";
                     } else if (maxWarning === 1) {
-                        // 구글 시트는 '정상제출'로 지워졌더라도 블랙박스 메모리에 1차경고가 있으면 이 문구 출력!
                         displayRemark = isDone ? "⚠️ 1회 이탈 후 정상제출" : "⚠️ 1회 화면이탈 (주의)";
                     } else if (rawRemark.includes("정상제출") || (isDone && (rawRemark === "" || rawRemark === "정상상태"))) {
                         displayRemark = "✅ 무결점 정상제출";
@@ -240,9 +238,14 @@
                         displayRemark = rawRemark || "정상상태";
                     }
                     
+                    // 💡 추가된 부분: 응시 횟수가 2회 이상이면 이름 아래에 뱃지를 달아줍니다.
+                    let attemptBadge = attemptCounts[i] > 1 
+                        ? `<br><span style="font-size:0.8em; color:#8e44ad; font-weight:bold;">(🔄 총 ${attemptCounts[i]}회 응시)</span>` 
+                        : "";
+
                     tr.innerHTML = `
                         <td><b>${i}</b></td>
-                        <td>${student['이름'] || '-'}</td>
+                        <td>${student['이름'] || '-'}${attemptBadge}</td>
                         <td>${statusHtml}</td>
                         <td>${formatDate(student['시작시간'] || student['시작 시간'])}</td>
                         <td>${formatDate(student['종료시간'] || student['종료 시간'])}</td>
@@ -270,7 +273,6 @@
             document.getElementById('lastUpdated').innerText = "데이터 갱신 오류";
         }
     }
-
     function formatDate(dateString) {
         if (!dateString || dateString === "-") return "-";
         const d = new Date(dateString);
