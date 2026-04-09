@@ -220,18 +220,22 @@
         if (document.hidden) triggerWarning();
     });
 
-    // 2. 바탕화면, 다른 프로그램, 분리된 새 창(ChatGPT 등) 클릭 감지
 // 2. 바탕화면, 다른 프로그램, 분리된 새 창(ChatGPT 등) 클릭 감지
     window.addEventListener('blur', function() {
-        // [수정된 부분] 가상 키보드가 닫히면서 아주 잠깐 창이 선택 해제되는 현상을 방지합니다.
-        // 태블릿의 키보드가 완전히 내려가고 다시 화면으로 돌아올 시간을 벌어주기 위해 0.2초(200ms) 동안 잠시 기다립니다.
+        // 💡 [핵심 수정] 태블릿 가상 키보드 및 드롭다운 방어 로직 추가
+        // 사용자가 텍스트 입력창(input), 내용 작성칸(textarea), 또는 선택창(select)을 터치해서 
+        // 태블릿 자체 UI(키보드 등)가 올라온 상태라면 억울한 이탈 경고를 무시합니다.
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+        if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') {
+            return; // 입력창 사용 중이면 이탈로 잡지 않고 안전하게 통과!
+        }
+
+        // 키보드 문제가 아닐 경우에만 원래대로 0.2초 뒤 진짜 이탈인지 검사합니다.
         setTimeout(function() {
-            // 0.2초가 지난 후에도 여전히 웹페이지(document)에 포커스가 없는지(hasFocus) 확인합니다.
-            // 만약 0.2초 뒤에도 포커스가 없다면, 정말로 다른 앱을 켰거나 바탕화면으로 나간 것이므로 이탈 경고를 실행합니다.
             if (!document.hasFocus()) {
                 triggerWarning();
             }
-        }, 200); // 200은 0.2초를 의미합니다. (1000 = 1초)
+        }, 200); 
     });
 
     // 3. 다시 시험 창으로 마우스를 클릭해 돌아왔을 때
