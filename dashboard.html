@@ -182,11 +182,22 @@
                     globalWarningMap[sessionKey] = 0; 
                 }
 
-                const remark = row['비고'] || "";
+const remark = row['비고'] || "";
                 
-                if (remark.includes("강제제출")) globalWarningMap[sessionKey] = 3;
-                else if (remark.includes("2차경고") && globalWarningMap[sessionKey] < 2) globalWarningMap[sessionKey] = 2;
-                else if (remark.includes("1차경고") && globalWarningMap[sessionKey] < 1) globalWarningMap[sessionKey] = 1;
+                // [수정] 3회 고정이 아니라, 텍스트에서 숫자를 자동으로 추출해서 최대 30회까지 인식하도록 변경
+                if (remark.includes("강제제출")) {
+                    globalWarningMap[sessionKey] = 30; // 강제 제출은 최대치인 30으로 기록
+                } else if (remark.includes("차경고")) {
+                    // 구글 시트에 "15차경고"라고 적혀있으면 숫자 15만 쏙 뽑아내는 마법의 코드입니다.
+                    const warningMatch = remark.match(/(\d+)차경고/);
+                    if (warningMatch) {
+                        const currentWarning = parseInt(warningMatch[1]);
+                        // 기존에 기록된 경고 횟수보다 지금 가져온 숫자가 더 크면 덮어씁니다.
+                        if (globalWarningMap[sessionKey] < currentWarning) {
+                            globalWarningMap[sessionKey] = currentWarning;
+                        }
+                    }
+                }
             });
 
             localStorage.setItem(HISTORY_KEY, JSON.stringify(globalWarningMap));
