@@ -242,7 +242,7 @@
                 if (rawRemark.includes("강제제출")) {
                     displayRemark = "🚨 화면이탈 누적 (강제제출)";
                 } else if (maxWarning >= 3) {
-                    displayRemark = `🚨 ${maxWarning}회 화면이탈 (위험/강제제출)`;
+                    displayRemark = `🚨 ${maxWarning}회 화면이탈 (위험)`;
                 } else if (rawRemark.includes("시간초과")) {
                     displayRemark = "⏳ 시간초과 (자동제출)";
                 } else if (maxWarning === 2) {
